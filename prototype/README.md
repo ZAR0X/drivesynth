@@ -4,17 +4,21 @@ Small 2D simulator we're writing for K-Impact 2026. The idea: put a bus with eme
 Indian-style traffic situations and find the settings where the AEB doesn't stop in time.
 
 Work in progress. Done so far: the bus and its brakes, the scooter that cuts in, a simple sensor, a
-basic AEB, and a script that runs one cut-in from start to finish.
+basic AEB, a script that runs one cut-in from start to finish, and a simple 2D viewer.
 
 ## Run
 
-Needs Python 3 (no extra packages yet).
+Needs Python 3. The viewer also needs matplotlib (and ffmpeg if you want to save videos).
 
 ```
 cd prototype
-python3 bus.py      # braking test, dry vs wet
-python3 sensor.py   # scooter cuts in, nobody brakes
-python3 cutin.py    # scooter cuts in, basic AEB, dry vs wet
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+
+.venv/bin/python bus.py      # braking test, dry vs wet
+.venv/bin/python sensor.py   # scooter cuts in, nobody brakes
+.venv/bin/python cutin.py    # scooter cuts in, basic AEB, dry vs wet
+.venv/bin/python view.py     # watch it from above, log prints in the terminal
 ```
 
 ## What's done so far
@@ -112,6 +116,22 @@ so it went straight to braking. With a 15 m gap it warns at 1.60 s, brakes at 2.
 
 First version of the log printed "AEB: warning" after it had already braked (TTC goes back up while
 the bus slows down). Fixed: once it's braking we don't log warnings anymore.
+
+**view.py**: watch one cut-in from above. Plain matplotlib window, camera follows the bus, and the
+same log lines get printed in the terminal when the playback reaches them.
+
+```
+.venv/bin/python view.py                          # same cut-in as above, dry
+.venv/bin/python view.py --rain 1                 # wet
+.venv/bin/python view.py --gap 15 --slow 0.25     # bigger gap, quarter speed
+.venv/bin/python view.py --rain 1 --save wet.mp4  # save a video instead
+```
+
+Colours: bus blue = watching, yellow = warning, purple = brake asked but the air brakes aren't working
+yet (that 0.3 s), red = braking. Cyan outline on the scooter = the sensor has confirmed it.
+
+The bus was orange during the "brake asked" bit at first, same as the scooter, which was confusing.
+Changed it to purple.
 
 ## Numbers we assumed
 

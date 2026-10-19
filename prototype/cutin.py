@@ -12,12 +12,15 @@ from sensor import Sensor
 from aeb import basic_aeb, in_bus_lane, time_to_collision
 
 
-def run_cutin(bus_kmh, gap, speed_diff_kmh, sideways_speed, rain, aeb=basic_aeb, show_log=False):
+def run_cutin(bus_kmh, gap, speed_diff_kmh, sideways_speed, rain, aeb=basic_aeb, show_log=False, record=False):
     bus = Bus(bus_kmh, rain)
     scooter = Scooter(bus_kmh, gap, speed_diff_kmh, sideways_speed)
     sensor = Sensor(rain)
+    events = []   # (time, text) - the log lines
+    frames = []   # one entry per step, used by view.py to draw the run
 
     def log(t, text):
+        events.append((t, text))
         if show_log:
             print(f"t={t:4.2f}s  {text}")
 
@@ -54,6 +57,17 @@ def run_cutin(bus_kmh, gap, speed_diff_kmh, sideways_speed, rain, aeb=basic_aeb,
 
         bus.step(t)
         scooter.step(t)
+        if record:
+            if bus.braking > 0:
+                state = "braking"
+            elif bus.brake_asked_at is not None:
+                state = "brake asked"
+            elif warned:
+                state = "warning"
+            else:
+                state = "watching"
+            frames.append({"t": t, "bus_x": bus.x, "bus_kmh": bus.speed * 3.6,
+                           "scooter_x": scooter.x, "scooter_y": scooter.y, "aeb": state, "seen": info is not None})
         if bus.braking > 0 and not braking_logged:
             log(t, "brakes working")
             braking_logged = True
@@ -75,6 +89,9 @@ def run_cutin(bus_kmh, gap, speed_diff_kmh, sideways_speed, rain, aeb=basic_aeb,
     result["smallest_ttc"] = None if smallest_ttc is None else round(smallest_ttc, 2)
     if result["outcome"] != "fail":
         log(t, f"no crash, bus at {bus.speed * 3.6:.0f} km/h, smallest TTC {result['smallest_ttc']} s -> {result['outcome']}")
+    if record:
+        result["frames"] = frames
+        result["events"] = events
     return result
 
 
