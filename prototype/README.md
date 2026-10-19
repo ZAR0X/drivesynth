@@ -133,6 +133,47 @@ yet (that 0.3 s), red = braking. Cyan outline on the scooter = the sensor has co
 The bus was orange during the "brake asked" bit at first, same as the scooter, which was confusing.
 Changed it to purple.
 
+**aeb.py, improved_aeb**: a second AEB version, only so the tester has two things to compare. We're
+not building an AEB; a company would plug in its own. It changes two things the basic one got wrong:
+
+- it also reacts to a scooter moving sideways towards the lane, if it'll get there before the bus does
+- in rain it brakes earlier: TTC 1.5 s dry, up to 2.3 s in heavy rain (the sensor passes on the rain
+  level, like the rain sensor that runs the wipers)
+
+**search.py**: the main idea of the project. 5 knobs for the cut-in (bus speed 20-60 km/h, gap 1-15 m,
+scooter speed -25..+5 km/h vs the bus, sideways speed 0.5-2.5 m/s, rain 0-1). We pick 100 settings two
+ways and count crashes:
+
+- random: 100 random settings
+- guided: `gp_minimize` from scikit-optimize (Bayesian optimisation). It looks at the runs so far and
+  tests next where it expects the smallest safety margin. Safety margin = smallest TTC if no crash, or
+  minus (crash speed / 10) if it crashed.
+
+Each done 5 times with different random starts (`search_results.csv`), takes about 4 minutes:
+
+```
+repeat 1: random found 21 crashes, guided found 89 crashes (out of 100 runs)
+repeat 2: random found 23 crashes, guided found 87 crashes (out of 100 runs)
+repeat 3: random found 20 crashes, guided found 84 crashes (out of 100 runs)
+repeat 4: random found 22 crashes, guided found 89 crashes (out of 100 runs)
+repeat 5: random found 21 crashes, guided found 90 crashes (out of 100 runs)
+average: random 21, guided 88 crashes per 100 runs
+```
+
+Catch: the guided search heads straight for the worst corner (tiny gaps, much slower scooter), so lots
+of its crashes are ones no brake could have stopped. It's great at finding failures, but the count
+alone overstates it a bit.
+
+**charts.py**: makes the three charts we use in the presentation:
+
+- `failure_map.png`: basic AEB, bus 40 km/h, gap vs scooter speed. Red = crash, yellow = near miss,
+  green = fine. 23% of the grid crashes on a dry road, 29% on a wet one.
+- `search_compare.png`: random vs guided, crashes per 100 runs (bars = average, dots = each repeat).
+- `basic_vs_improved.png`: the same 400 random cut-ins with both AEBs. Basic 17% crash dry / 23% wet,
+  improved 7% / 14%.
+
+Demo videos: `view.py ... --save out/name.mp4`. `out/` isn't in git.
+
 ## Numbers we assumed
 
 The 0.3 s delay and the 6.5 / 3.5 m/s² values are typical figures for a city bus on dry/wet asphalt,

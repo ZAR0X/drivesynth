@@ -13,6 +13,7 @@ from matplotlib.animation import FuncAnimation, FFMpegWriter
 from matplotlib.patches import Rectangle
 
 from bus import BUS_LENGTH, BUS_WIDTH, DT
+from aeb import basic_aeb, improved_aeb
 from cutin import run_cutin
 from scooter import SCOOTER_LENGTH, SCOOTER_WIDTH
 
@@ -25,16 +26,18 @@ parser.add_argument("--diff", type=float, default=-15, help="scooter speed minus
 parser.add_argument("--side", type=float, default=1.0, help="scooter sideways speed, m/s")
 parser.add_argument("--rain", type=float, default=0.0, help="0 = dry, 1 = heavy rain")
 parser.add_argument("--slow", type=float, default=0.5, help="playback speed, 1 = real time")
+parser.add_argument("--aeb", choices=["basic", "improved"], default="basic", help="which AEB to use")
 parser.add_argument("--save", help="save to this .mp4 file instead of showing a window")
 args = parser.parse_args()
 
-run = run_cutin(args.speed, args.gap, args.diff, args.side, args.rain, record=True)
+aeb = improved_aeb if args.aeb == "improved" else basic_aeb
+run = run_cutin(args.speed, args.gap, args.diff, args.side, args.rain, aeb=aeb, record=True)
 frames = run["frames"]
 events = run["events"]
 frames = frames + [frames[-1]] * int(1.5 / DT)   # hold the last picture for a moment
 
 print(f"bus {args.speed:.0f} km/h, scooter {args.diff:+.0f} km/h, gap {args.gap} m, "
-      f"sideways {args.side} m/s, rain {args.rain}")
+      f"sideways {args.side} m/s, rain {args.rain}, {args.aeb} AEB")
 
 fig, ax = plt.subplots(figsize=(10, 2.8))
 fig.subplots_adjust(left=0.02, right=0.98, top=0.85, bottom=0.05)
@@ -68,7 +71,7 @@ def draw(i):
     ax.text(left, -6.0, "bus: blue = watching, yellow = warning, purple = brake asked (air brakes not working yet), red = braking   "
                         "cyan outline = sensor has seen the scooter", fontsize=8, va="top", color="0.3")
 
-    title = f"t = {f['t']:.2f} s     bus {f['bus_kmh']:.0f} km/h     AEB: {f['aeb']}"
+    title = f"{args.aeb} AEB, {'wet' if args.rain > 0.5 else 'dry'}    t = {f['t']:.2f} s    bus {f['bus_kmh']:.0f} km/h    AEB: {f['aeb']}"
     if i >= len(run["frames"]) - 1:
         if run["outcome"] == "fail":
             title += f"     CRASH at {run['crash_speed_kmh']:.0f} km/h"

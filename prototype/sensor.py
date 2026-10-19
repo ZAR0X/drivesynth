@@ -16,6 +16,7 @@ class Sensor:
         self.range = RANGE_DRY * (1 - 0.4 * rain)       # heavy rain: 60 m
         self.confirm_time = CONFIRM_TIME * (1 + rain)   # heavy rain: 0.6 s
         self.first_seen = None
+        self.rain = rain
 
     def look(self, t, bus, scooter):
         """Returns what the AEB is told about the scooter, or None if it doesn't know about it yet."""
@@ -33,6 +34,7 @@ class Sensor:
             "y": scooter.y,                               # sideways position of the scooter
             "closing_speed": bus.speed - scooter.speed,   # how fast the gap shrinks (m/s)
             "sideways_speed": scooter.sideways_speed if scooter.is_moving_sideways(t) else 0.0,
+            "rain": self.rain,                            # like the rain sensor that runs the wipers
         }
 
 
