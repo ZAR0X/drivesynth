@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+archive_2026-10-19/
+PLAN.md
+*.pdf
+*.pptx
