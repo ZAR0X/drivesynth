@@ -6,6 +6,8 @@
 #   python view.py --gap 15 --slow 0.25    bigger gap, quarter speed
 #   python view.py --rain 1 --save wet.mp4 save a video instead of opening a window
 
+"""2D top view of one cut-in, with the log in the terminal (or under the road when saving a video)."""
+
 import argparse
 
 import matplotlib.pyplot as plt
@@ -19,37 +21,12 @@ from scooter import SCOOTER_LENGTH, SCOOTER_WIDTH
 
 BUS_COLOURS = {"watching": "tab:blue", "warning": "gold", "brake asked": "mediumpurple", "braking": "red"}
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--speed", type=float, default=40, help="bus speed, km/h")
-parser.add_argument("--gap", type=float, default=6, help="gap when the scooter starts cutting in, m")
-parser.add_argument("--diff", type=float, default=-15, help="scooter speed minus bus speed, km/h")
-parser.add_argument("--side", type=float, default=1.0, help="scooter sideways speed, m/s")
-parser.add_argument("--rain", type=float, default=0.0, help="0 = dry, 1 = heavy rain")
-parser.add_argument("--slow", type=float, default=0.5, help="playback speed, 1 = real time")
-parser.add_argument("--aeb", choices=["basic", "improved"], default="basic", help="which AEB to use")
-parser.add_argument("--save", help="save to this .mp4 file instead of showing a window")
-args = parser.parse_args()
-
-aeb = improved_aeb if args.aeb == "improved" else basic_aeb
-run = run_cutin(args.speed, args.gap, args.diff, args.side, args.rain, aeb=aeb, record=True)
-frames = run["frames"]
-events = run["events"]
-frames = frames + [frames[-1]] * int(1.5 / DT)   # hold the last picture for a moment
-
-print(f"bus {args.speed:.0f} km/h, scooter {args.diff:+.0f} km/h, gap {args.gap} m, "
-      f"sideways {args.side} m/s, rain {args.rain}, {args.aeb} AEB")
-
-fig, ax = plt.subplots(figsize=(10, 2.8))
-fig.subplots_adjust(left=0.02, right=0.98, top=0.85, bottom=0.05)
-printed = set()
-
-
-def draw(i):
-    f = frames[i]
+def draw_scene(ax, f, title, ymin=-6.8):
+    """Draw one frame of a recorded cut-in (road, bus, scooter, colour key) on ax. Used by view.py and gui.py."""
     ax.clear()
     left, right = f["bus_x"] - 16, f["bus_x"] + 30      # camera follows the bus
     ax.set_xlim(left, right)
-    ax.set_ylim(-6.8, 2.5)
+    ax.set_ylim(ymin, 2.5)
     ax.set_aspect("equal")
     ax.axis("off")
 
@@ -70,25 +47,64 @@ def draw(i):
             fontsize=8, color="white")
     ax.text(left, -6.0, "bus: blue = watching, yellow = warning, purple = brake asked (air brakes not working yet), red = braking   "
                         "cyan outline = sensor has seen the scooter", fontsize=8, va="top", color="0.3")
-
-    title = f"{args.aeb} AEB, {'wet' if args.rain > 0.5 else 'dry'}    t = {f['t']:.2f} s    bus {f['bus_kmh']:.0f} km/h    AEB: {f['aeb']}"
-    if i >= len(run["frames"]) - 1:
-        if run["outcome"] == "fail":
-            title += f"     CRASH at {run['crash_speed_kmh']:.0f} km/h"
-        else:
-            title += f"     no crash ({run['outcome']})"
     ax.set_title(title, loc="left", fontsize=10, family="monospace")
-
-    # print log lines in the terminal when the playback reaches them
-    for k, (et, text) in enumerate(events):
-        if et <= f["t"] + 1e-9 and k not in printed:
-            print(f"t={et:4.2f}s  {text}")
-            printed.add(k)
+    return left
 
 
-anim = FuncAnimation(fig, draw, frames=len(frames), interval=DT * 1000 / args.slow, repeat=False)
-if args.save:
-    anim.save(args.save, writer=FFMpegWriter(fps=round(1 / DT * args.slow)))
-    print(f"saved {args.save}")
-else:
-    plt.show()
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--speed", type=float, default=40, help="bus speed, km/h")
+    parser.add_argument("--gap", type=float, default=6, help="gap when the scooter starts cutting in, m")
+    parser.add_argument("--diff", type=float, default=-15, help="scooter speed minus bus speed, km/h")
+    parser.add_argument("--side", type=float, default=1.0, help="scooter sideways speed, m/s")
+    parser.add_argument("--rain", type=float, default=0.0, help="0 = dry, 1 = heavy rain")
+    parser.add_argument("--slow", type=float, default=0.5, help="playback speed, 1 = real time")
+    parser.add_argument("--aeb", choices=["basic", "improved"], default="basic", help="which AEB to use")
+    parser.add_argument("--save", help="save to this .mp4 file instead of showing a window")
+    parser.add_argument("--log-panel", action="store_true",
+                        help="also draw the log under the road (always on with --save, since a video has no terminal)")
+    args = parser.parse_args()
+    show_log_panel = args.log_panel or bool(args.save)
+
+    aeb = improved_aeb if args.aeb == "improved" else basic_aeb
+    run = run_cutin(args.speed, args.gap, args.diff, args.side, args.rain, aeb=aeb, record=True)
+    frames = run["frames"]
+    events = run["events"]
+    frames = frames + [frames[-1]] * int(1.5 / DT)   # hold the last picture for a moment
+
+    print(f"bus {args.speed:.0f} km/h, scooter {args.diff:+.0f} km/h, gap {args.gap} m, "
+          f"sideways {args.side} m/s, rain {args.rain}, {args.aeb} AEB")
+
+    fig, ax = plt.subplots(figsize=(10, 4.3 if show_log_panel else 2.8))
+    fig.subplots_adjust(left=0.02, right=0.98, top=0.9 if show_log_panel else 0.85, bottom=0.02)
+    printed = set()
+
+
+    def draw(i):
+        f = frames[i]
+        title = f"{args.aeb} AEB, {'wet' if args.rain > 0.5 else 'dry'}    t = {f['t']:.2f} s    bus {f['bus_kmh']:.0f} km/h    AEB: {f['aeb']}"
+        if i >= len(run["frames"]) - 1:
+            if run["outcome"] == "fail":
+                title += f"     CRASH at {run['crash_speed_kmh']:.0f} km/h"
+            else:
+                title += f"     no crash ({run['outcome']})"
+        left = draw_scene(ax, f, title, ymin=-13.5 if show_log_panel else -6.8)
+
+        # in a video there's no terminal, so draw the latest log lines under the road
+        if show_log_panel:
+            shown = [f"t={et:4.2f}s  {text}" for et, text in events if et <= f["t"] + 1e-9][-5:]
+            ax.text(left, -7.3, "\n".join(shown) if shown else "(log)", family="monospace", fontsize=9,
+                    va="top", color="0.1", linespacing=1.5)
+
+        # print log lines in the terminal when the playback reaches them
+        for k, (et, text) in enumerate(events):
+            if et <= f["t"] + 1e-9 and k not in printed:
+                print(f"t={et:4.2f}s  {text}")
+                printed.add(k)
+
+    anim = FuncAnimation(fig, draw, frames=len(frames), interval=DT * 1000 / args.slow, repeat=False)
+    if args.save:
+        anim.save(args.save, writer=FFMpegWriter(fps=round(1 / DT * args.slow)))
+        print(f"saved {args.save}")
+    else:
+        plt.show()
